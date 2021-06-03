@@ -1,0 +1,188 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  CidrIpVPC:
+    Description: CidrIpVPC
+    Type: String
+    Default: "10.0.0.0/16"
+
+  CidrIpPublicSubnet1a:
+    Description: CidrIpPublicSubnet1a
+    Type: String
+    Default: "10.0.1.0/24"
+
+  CidrIpPrivateubnet1a:
+    Description: CidrIpPublicSubnet1c
+    Type: String
+    Default: "10.0.2.0/24"
+
+  CidrIpPublicSubnet1c:
+    Description: CidrIpPublicSubnet1c
+    Type: String
+    Default: "10.0.3.0/24"
+
+  CidrIpPrivateSubnet1c:
+    Description: CidrIpPrivateSubnet1c
+    Type: String
+    Default: "10.0.4.0/24"
+
+Resources:
+  # **************************************************
+  #　VPCの設定
+  # **************************************************
+  MyVpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref CidrIpVPC
+      Tags:
+        - Key: Name
+          Value: MyVpc
+  # **************************************************
+  # public subnet1aの構築　
+  # **************************************************
+  PublicSubnet1a:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+
+      VpcId: !Ref MyVpc
+      CidrBlock: !Ref CidrIpPublicSubnet1a
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: PublicSubet1a
+  # **************************************************
+  # privateb subnet1aの構築
+  # **************************************************
+  PrivateSubnet1a:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 0
+          - Fn::GetAZs: ""
+      VpcId: !Ref MyVpc
+      CidrBlock: !Ref CidrIpPrivateubnet1a
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: PrivateSubnet1a
+  # **************************************************
+  # public subnet1cの構築
+  # **************************************************
+  PublicSubnet1c:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      VpcId: !Ref MyVpc
+      CidrBlock: !Ref CidrIpPublicSubnet1c
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: PublicSubnet1c
+  # **************************************************
+  # public subnet1cの構築　
+  # **************************************************
+  PrivateSubnet1c:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone:
+        Fn::Select:
+          - 1
+          - Fn::GetAZs: ""
+      VpcId: !Ref MyVpc
+      CidrBlock: !Ref CidrIpPrivateSubnet1c
+      MapPublicIpOnLaunch: True
+      Tags:
+        - Key: Name
+          Value: PriavateSubnet1c
+
+  # **************************************************
+  # インターネットゲートウェイの設置　
+  # **************************************************
+  IgwCF:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: IGW-CF
+  # **************************************************
+  # インターネットゲートウェイのVPCへの関連付け
+  # **************************************************
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      InternetGatewayId: !Ref IgwCF
+      VpcId: !Ref MyVpc
+  # **************************************************
+  # パブリックルートテーブル
+  # **************************************************
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MyVpc
+      Tags:
+        - Key: Name
+          Value: PulbicRtbCF
+
+  # パブリック　ルーティング ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  RTpub1cCF:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref IgwCF
+
+  #ルートテーブル関連付け PublicSubnet1a　〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜
+  PublicRtbAssociate1a:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable # Required
+      SubnetId: !Ref PublicSubnet1a # Required
+
+  #ルートテーブル関連付け PublicSubnet1c　〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜〜
+  PublicRtbAssociate1c:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTable # Required
+      SubnetId: !Ref PublicSubnet1c # Required
+
+  # **************************************************
+  # 出力
+  # **************************************************
+Outputs:
+  MyVpc:
+    Description: VPC for CloudFormation
+    Value: !Ref MyVpc
+    Export:
+      Name: MyVpc
+
+  PublicSubnet1a:
+    Description: Public-subnet-1a
+    Value: !Ref PublicSubnet1a
+    Export:
+      Name: PublicSubnet1a
+
+  PrivateSubnet1a:
+    Description: private-subnet-1a
+    Value: !Ref PrivateSubnet1a
+    Export:
+      Name: PrivateSubnet1a
+
+  PublicSubnet1c:
+    Description: public-subnet-1c
+    Value: !Ref PublicSubnet1c
+    Export:
+      Name: PublicSubnet1c
+
+  PrivateSubnet1c:
+    Description: private-subnet-1c
+    Value: !Ref PrivateSubnet1c
+    Export:
+      Name: PrivateSubnet1c
