@@ -1,0 +1,54 @@
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  SGwebServer:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SGforWebServer #任意の名前
+      GroupDescription: Allow http to client host
+      VpcId: !ImportValue MyVpc
+      SecurityGroupIngress:
+        #ssh接続のポート許可
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        #http接続のポート許可
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        #https接続のポート許可
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: SGwebserver
+
+  SGforRDS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: SGforRDS
+      GroupDescription: SGforRDS
+      VpcId: !ImportValue MyVpc
+      SecurityGroupIngress:
+        #mysqlのポートを許可
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+      Tags:
+        - Key: Name
+          Value: SGforRDS
+Outputs:
+  SGwebServer:
+    Description: SG webServer
+    Value: !Ref SGwebServer
+    Export:
+      Name: SGwebServer
+
+  SGforRDS:
+    Description: SGforRDS
+    Value: !Ref SGforRDS
+    Export:
+      Name: SGforRDS
