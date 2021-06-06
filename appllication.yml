@@ -1,0 +1,169 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  EC2InstanceType:
+    Description: InstanceTypeOfWebServer
+    Type: CommaDelimitedList
+    Default: "t2.nano, t2.micro, m1.small"
+
+  MasterUserPassword:
+    Description: Password for RDS connection
+    Type: String
+    NoEcho: true
+    # ParameterのPropertyに"NoEcho:true"を追加するとコンソールなどで表示した際に全て"*"で表示(視認できない)。
+  KeyName:
+    Description: Key Pair Name
+    Type: String
+    NoEcho: true
+
+Resources:
+  # **************************************************
+  # EC2
+  # **************************************************
+  # 論理IDはResourceからインデントを下げる。
+  WebServer1a:
+    # TypeとPropertiesは論理IDからインデントを下げる。
+    Type: AWS::EC2::Instance
+    Properties:
+      #Propertyの各項目はPropertiesからインデントを下げる。
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      ImageId:
+        "ami-0ca38c7440de1749a"
+        # Required: Conditional
+        #起動テンプレートのPropertyかImageIdのどちらかのPropertyでAMIのIDを指定
+      InstanceType:
+        !Select [0, !Ref EC2InstanceType]
+        # デフォルト設定があるので、必須ではないが、m1.smallになってしまうので、変更しておく。
+      KeyName:
+        "hands-on"
+        #EC2にログインするなら必要。「.pem」などの拡張子は記述しない。
+      SecurityGroupIds:
+        - !ImportValue SGwebServer
+        #Required:　conditional　セキュリティーグループのIDをリスト形式で記載
+      SubnetId: !ImportValue PublicSubnet1a
+      # 何も設定しないとデフォルトサブネットで起動されるので、自分で設定したパブリックサブネットの値をインポート
+
+  WebServer1c:
+    Type: AWS::EC2::Instance
+    Properties:
+      AvailabilityZone: !Sub "${AWS::Region}c"
+      ImageId: "ami-0ca38c7440de1749a"
+      InstanceType: !Select [0, !Ref EC2InstanceType]
+      KeyName: !Ref KeyName
+      SecurityGroupIds:
+        - !ImportValue SGwebServer
+      SubnetId: !ImportValue PublicSubnet1c
+  # **************************************************
+  # LoadBalancer
+  # **************************************************
+  MyALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    #Resource名"Elastic Load Balancing"はCLB。それ以外は、V2を選択
+    Properties:
+      Name: "MyALB"
+      Scheme: "internet-facing"
+      #内部/internal | インターネット/Internetーfacingから選択
+      SecurityGroups:
+        - !ImportValue SGwebServer
+      #必須ではないが、リスト形式で値を記述
+      Subnets:
+        - !ImportValue PublicSubnet1a
+        - !ImportValue PublicSubnet1c
+      #SubnetMappingsかSubnetsのいずれかのPropertyでALBのサブネットを記述するのが必須
+      Type: application
+      #LoadBalancerの種類をapplication | gateway | networkから指定。何も指定しないとapplicationになる。
+      # ****************************************
+      # Load Balncer TargetGropup
+      # ****************************************
+  ALBTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      #以下のPropertyでヘルスチェックの設定ができるが、デフォルト値で良い場合はスルーしてOK
+      #HealthCheckEnabled: true
+      # HealthCheckIntervalSeconds: 10
+      # HealthCheckPath: "2"
+      # HealthCheckPort: "traffic-port"
+      # HealthCheckProtocol: "String"
+      # HealthCheckTimeoutSeconds: Number
+      # HealthyThresholdCount: Number
+      Name: "ALBtargetGroup"
+      #ターゲットのインスタンスがトラフィックを受けるポート
+      Port:
+        80
+        #Required: Conditional
+        #Type: Integer
+        #Minimum: 1
+        #Maximum: 65535
+      Protocol:
+        "HTTP"
+        #ALBの場合はサポートしているプロトコルがHTTPかHTTPSなのでいずれかを記載
+        #Required: Conditional
+        #Type: String
+        #Allowed values: GENEVE | HTTP | HTTPS | TCP | TCP_UDP | TLS | UDP
+      # ProtocolVersion: "String"
+      # TargetGroupAttributes: TargetGroupAttributes
+      TargetType: "instance"
+      #ターゲットグループに登録するリソースのタイプをinstance | ip  | lambdaから選択。デフォルトはinstance。
+
+      Targets:
+        - Id: !Ref WebServer1a
+          Port: 80
+        - Id: !Ref WebServer1c
+          Port: 80
+        #Targetがinstanceの場合はインスタンスIDとターゲットがListenしているPort番号。HTTPなので80。
+      VpcId: !ImportValue MyVpc
+      #TargetがLambda以外の場合は記述必須。エクスポートされているVpcから参照
+      # **********************************************
+      #  Load Balancer Listener　
+      # **********************************************
+  ALBListner:
+    Type: "AWS::ElasticLoadBalancingV2::Listener"
+    Properties:
+      LoadBalancerArn: !Ref MyALB
+      #どのLoadBalncerのListenerかをARNで指定。
+      Port: 80
+      Protocol: "HTTP"
+      #上記2つでLoadBalncerがListenしているポート番号とプロトコルを指定
+      DefaultActions:
+        - TargetGroupArn: !Ref ALBTargetGroup
+          Type:
+            "forward"
+            #ターゲットがLambda以外の場合は必須。authenticate-cognito | authenticate-oidc | fixed-response | forward | redirectから設定できる。
+
+          # **************************************************
+          # SubnetGroup
+          # **************************************************
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "SubnetGroup for RDS" # サブネットグループの説明。必須
+      DBSubnetGroupName: "mysubnetgroup"
+      SubnetIds: # 必須。network.ymlで構築したプライベートサブネットを2つリスト形式で指定。
+        - !ImportValue PrivateSubnet1a
+        - !ImportValue PrivateSubnet1c
+
+  MyRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: "20" #DBエンジンがAmazon Aurora以外なら必須。MySQLは20-65536
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      #DBが作成されるAZを記述。デフォルトはエンドポイントのリージョンからランダム。マルチAZが有効担っている時は指定不可。
+      DBInstanceClass: "db.t2.micro" # Required
+      DBName: "MyRDS" #DBエンジンによって必須か不要か異なる。MySQLでは必須。
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Engine: "mysql" #Conditionalになっているが、DBインスタンスを作成するなら必須
+      EngineVersion: "8.0.17"
+      MasterUserPassword: !Ref MasterUserPassword
+      #Conditionalスナップショットから復元している場合か、エンジンがAmazon Auroraの時以外は必須
+      #テンプレートにパスワードを直書きするのはセキュリティ上NGなので
+      MasterUsername: "root"
+      # MonitoringInterval: 0
+      MultiAZ: false #マルチAZ無効
+      Port: "3306" #mysqlの接続ポート番号を指定
+      PubliclyAccessible: false #パブリックIPの割り当てなし。
+      # SourceDBInstanceIdentifier: "String"　＃リードレプリカを作る際は元となるDBインスタンスのIDをここで指定。今回はなし。
+      # SourceRegion: "String"　＃リードレプリカの元となるDBインスタンスのあるリージョン
+      StorageType: "gp2"
+      #Valid values: standard | gp2 | io1 汎用は"gp2"。"standard"はマグネティックなので注意
+      VPCSecurityGroups:
+        - !ImportValue SGforRDS
