@@ -79,11 +79,11 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       #以下のPropertyでヘルスチェックの設定ができるが、デフォルト値で良い場合はスルーしてOK
-      #HealthCheckEnabled: true
-      # HealthCheckIntervalSeconds: 10
+      HealthCheckEnabled: true
+      HealthCheckIntervalSeconds: 5
       # HealthCheckPath: "2"
       # HealthCheckPort: "traffic-port"
-      # HealthCheckProtocol: "String"
+      HealthCheckProtocol: "HTTP"
       # HealthCheckTimeoutSeconds: Number
       # HealthyThresholdCount: Number
       Name: "ALBtargetGroup"
