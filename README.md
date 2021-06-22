@@ -1,0 +1,1 @@
+# AWS王道構成パターンのCloudFormation化
