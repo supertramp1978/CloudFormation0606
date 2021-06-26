@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: 2010-09-09
+
+Parameters:
+  MasterUserPassword:
+    Description: Password for RDS connection
+    Type: String
+    NoEcho: true
+  # ParameterのPropertyに"NoEcho:true"を追加するとコンソールなどで表示した際に全て"*"で表示(視認できない)。
+
+Resources:
+  # **************************************************
+  # SubnetGroup
+  # **************************************************
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "SubnetGroup for RDS" # サブネットグループの説明。必須
+      DBSubnetGroupName: "MySubnetGroup-cfn"
+      SubnetIds: # 必須。プライベートサブネットを2つリスト形式で指定。
+        - !ImportValue PrivateSubnet1a
+        - !ImportValue PrivateSubnet1c
+
+  # **************************************************
+  # RDS
+  # **************************************************
+  MyRDS:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: "20" #DBエンジンがAmazon Aurora以外なら必須。MySQLは20-65536
+      AvailabilityZone: !Sub "${AWS::Region}a"
+      #DBが作成されるAZを記述。デフォルトはエンドポイントのリージョンからランダム。マルチAZが有効担っている時は指定不可。
+      DBInstanceClass: "db.t2.micro" # Required
+      DBName: "MyRDS" #DBエンジンによって必須か不要か異なる。MySQLでは必須。
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      Engine: "mysql" #Conditionalになっているが、DBインスタンスを作成するなら必須
+      EngineVersion: "8.0.17"
+      MasterUserPassword: !Ref MasterUserPassword
+      #Conditionalスナップショットから復元している場合か、エンジンがAmazon Auroraの時以外は必須
+      #テンプレートにパスワードを直書きするのはセキュリティ上NGなので
+      MasterUsername: "root"
+      # MonitoringInterval: 0
+      MultiAZ: false #マルチAZ無効
+      Port: "3306" #mysqlの接続ポート番号を指定
+      PubliclyAccessible: false #パブリックIPの割り当てなし。
+      # SourceDBInstanceIdentifier: "String"　＃リードレプリカを作る際は元となるDBインスタンスのIDをここで指定。今回はなし。
+      # SourceRegion: "String"　＃リードレプリカの元となるDBインスタンスのあるリージョン
+      StorageType: "gp2"
+      #Valid values: standard | gp2 | io1 汎用は"gp2"。"standard"はマグネティックなので注意
+      VPCSecurityGroups:
+        - !ImportValue SGforRDS

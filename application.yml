@@ -6,9 +6,9 @@ Parameters:
     Type: CommaDelimitedList
     Default: "t2.nano, t2.micro, m1.small"
 
-  MasterUserPassword:
-    Description: Password for RDS connection
-    Type: String
+    # MasterUserPassword:
+    #   Description: Password for RDS connection
+    #   Type: String
     NoEcho: true
     # ParameterのPropertyに"NoEcho:true"を追加するとコンソールなどで表示した際に全て"*"で表示(視認できない)。
   KeyName:
@@ -47,7 +47,7 @@ Resources:
     Type: AWS::EC2::Instance
     Properties:
       AvailabilityZone: !Sub "${AWS::Region}c"
-      ImageId: "ami-0ca38c7440de1749a"
+      ImageId: "ami-06631ebafb3ae5d34"
       InstanceType: !Select [0, !Ref EC2InstanceType]
       KeyName: !Ref KeyName
       SecurityGroupIds:
@@ -80,11 +80,12 @@ Resources:
     Properties:
       #以下のPropertyでヘルスチェックの設定ができるが、デフォルト値で良い場合はスルーしてOK
       HealthCheckEnabled: true
-      HealthCheckIntervalSeconds: 5
+      #HealthCheckTimeoutSecondsより大きいこと
+      HealthCheckIntervalSeconds: 10
       # HealthCheckPath: "2"
       # HealthCheckPort: "traffic-port"
       HealthCheckProtocol: "HTTP"
-      # HealthCheckTimeoutSeconds: Number
+      # HealthCheckTimeoutSeconds: Number #デフォルト値は5秒
       # HealthyThresholdCount: Number
       Name: "ALBtargetGroup"
       #ターゲットのインスタンスがトラフィックを受けるポート
@@ -113,9 +114,9 @@ Resources:
         #Targetがinstanceの場合はインスタンスIDとターゲットがListenしているPort番号。HTTPなので80。
       VpcId: !ImportValue MyVpc
       #TargetがLambda以外の場合は記述必須。エクスポートされているVpcから参照
-      # **********************************************
-      #  Load Balancer Listener　
-      # **********************************************
+  # **********************************************
+  #  Load Balancer Listener　
+  # **********************************************
   ALBListner:
     Type: "AWS::ElasticLoadBalancingV2::Listener"
     Properties:
@@ -129,41 +130,9 @@ Resources:
           Type:
             "forward"
             #ターゲットがLambda以外の場合は必須。authenticate-cognito | authenticate-oidc | fixed-response | forward | redirectから設定できる。
-
-          # **************************************************
-          # SubnetGroup
-          # **************************************************
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: "SubnetGroup for RDS" # サブネットグループの説明。必須
-      DBSubnetGroupName: "mysubnetgroup"
-      SubnetIds: # 必須。network.ymlで構築したプライベートサブネットを2つリスト形式で指定。
-        - !ImportValue PrivateSubnet1a
-        - !ImportValue PrivateSubnet1c
-
-  MyRDS:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      AllocatedStorage: "20" #DBエンジンがAmazon Aurora以外なら必須。MySQLは20-65536
-      AvailabilityZone: !Sub "${AWS::Region}a"
-      #DBが作成されるAZを記述。デフォルトはエンドポイントのリージョンからランダム。マルチAZが有効担っている時は指定不可。
-      DBInstanceClass: "db.t2.micro" # Required
-      DBName: "MyRDS" #DBエンジンによって必須か不要か異なる。MySQLでは必須。
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      Engine: "mysql" #Conditionalになっているが、DBインスタンスを作成するなら必須
-      EngineVersion: "8.0.17"
-      MasterUserPassword: !Ref MasterUserPassword
-      #Conditionalスナップショットから復元している場合か、エンジンがAmazon Auroraの時以外は必須
-      #テンプレートにパスワードを直書きするのはセキュリティ上NGなので
-      MasterUsername: "root"
-      # MonitoringInterval: 0
-      MultiAZ: false #マルチAZ無効
-      Port: "3306" #mysqlの接続ポート番号を指定
-      PubliclyAccessible: false #パブリックIPの割り当てなし。
-      # SourceDBInstanceIdentifier: "String"　＃リードレプリカを作る際は元となるDBインスタンスのIDをここで指定。今回はなし。
-      # SourceRegion: "String"　＃リードレプリカの元となるDBインスタンスのあるリージョン
-      StorageType: "gp2"
-      #Valid values: standard | gp2 | io1 汎用は"gp2"。"standard"はマグネティックなので注意
-      VPCSecurityGroups:
-        - !ImportValue SGforRDS
+Outputs:
+  ALBTargetGroup:
+    Description: Target Group for ALB
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: ALBTargetGroup-cfn

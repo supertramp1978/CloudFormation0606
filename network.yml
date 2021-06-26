@@ -154,6 +154,19 @@ Resources:
       SubnetId: !Ref PublicSubnet1c # Required
 
   # **************************************************
+  # SubnetGroup
+  # **************************************************
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: "SubnetGroup for RDS" # サブネットグループの説明。必須
+      DBSubnetGroupName: "mysubnetgroup"
+      SubnetIds: # 必須。プライベートサブネットを2つリスト形式で指定。
+        - !Ref PrivateSubnet1a
+        - !Ref PrivateSubnet1c
+
+  # **************************************************
   # 出力
   # **************************************************
 Outputs:
@@ -186,3 +199,9 @@ Outputs:
     Value: !Ref PrivateSubnet1c
     Export:
       Name: PrivateSubnet1c
+
+  DBSubnetGroup:
+    Description: subnet-group-rds
+    Value: !Ref DBSubnetGroup
+    Export:
+      Name: DBSunbetGroup

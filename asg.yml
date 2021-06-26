@@ -1,0 +1,93 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Parameters:
+  EC2InstanceType:
+    Description: InstanceTypeOfWebServer
+    Type: CommaDelimitedList
+    Default: "t2.nano, t2.micro, m1.small"
+
+  KeyName:
+    Description: Key Pair Name
+    Type: String
+    NoEcho: true
+
+  LaunchTempVersion:
+    Description: Launch Template Version Number
+    Type: String
+    Default: "1"
+
+Resources:
+  # **********************************************
+  #  Launch Template
+  # **********************************************
+  LaunchTemp:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateName: "LaunchTemp-cfn"
+      LaunchTemplateData:
+        TagSpecifications:
+          - ResourceType: "instance"
+            Tags:
+              - Key: "Name"
+                Value: "WebServer-asg-cfn"
+        KeyName: !Ref KeyName
+        NetworkInterfaces:
+          - AssociatePublicIpAddress: true #パブリックIPの割り当て
+            #インスタンス削除後にネットワークインタフェースも削除するか
+            DeleteOnTermination: true
+            DeviceIndex: 0
+            # **********************************************
+            #　 ↑はエラーになったプロパティだが意味不明
+            # DeviceIndex
+            # The device index for the network interface attachment.
+            # Required: No
+            # Type: Integer
+            # **********************************************
+            Groups:
+              - !ImportValue SGwebServer
+              #
+        ImageId: "ami-06631ebafb3ae5d34"
+        InstanceType: !Select [0, !Ref EC2InstanceType]
+
+  # **********************************************
+  #  Auto Scaling Group
+  # **********************************************
+  myASG:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      AutoScalingGroupName: "AutoScaling-cfn"
+      #所属しているリージョンのAZを配列で取得して代入
+      AvailabilityZones:
+        - !Sub "${AWS::Region}a"
+        - !Sub "${AWS::Region}c"
+      DesiredCapacity: "3"
+      HealthCheckGracePeriod: 300 #インスタンス起動後ヘルスチェックするまでどのくらい置くか
+      HealthCheckType: "ELB"
+      MaxSize: "4"
+      MinSize: "2"
+      MixedInstancesPolicy:
+        LaunchTemplate:
+          LaunchTemplateSpecification:
+            LaunchTemplateId: !Ref LaunchTemp #起動テンプレートの戻り値はIDなのでそのまま参照でOK
+            Version: !Ref LaunchTempVersion
+          Overrides:
+            - InstanceType: "t2.micro"
+      TargetGroupARNs:
+        - !ImportValue ALBTargetGroup-cfn
+      VPCZoneIdentifier:
+        - !ImportValue PublicSubnet1a
+        - !ImportValue PublicSubnet1c
+  # **********************************************
+  #  Auto Scaling Policy
+  # **********************************************
+  AutoScalingScalingPolicy:
+    Type: "AWS::AutoScaling::ScalingPolicy"
+    Properties:
+      AutoScalingGroupName: !Ref myASG
+      PolicyType: "TargetTrackingScaling"
+      EstimatedInstanceWarmup: 300
+      TargetTrackingConfiguration:
+        PredefinedMetricSpecification:
+          PredefinedMetricType: "ASGAverageCPUUtilization"
+        TargetValue: 50
+        DisableScaleIn: false
