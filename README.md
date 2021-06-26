@@ -1,8 +1,8 @@
 # AWS王道構成パターンのCloudFormation化
 ## 構成図
-![diagram_sample1](https://user-images.githubusercontent.com/82194930/122900839-f9355600-d387-11eb-941c-514ce4602ab0.png)
+![Cfn_Diagram](https://user-images.githubusercontent.com/82194930/123505562-cb5b5480-d69a-11eb-839e-560047141fb9.png)
 ## 使用したAWSサービス
 - EC2
 - ALB
 - RDS
-- Route53
+- AutoScaling Group
